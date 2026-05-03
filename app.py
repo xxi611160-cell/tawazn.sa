@@ -1,81 +1,83 @@
 import streamlit as st
+import sqlite3
 
-st.set_page_config(page_title="توازن AI", layout="wide")
+st.set_page_config(page_title="المنصة الوطنية", layout="wide")
 
-st.title("🚀 نظام توازن AI - تحليل عدالة التوظيف")
+# 📦 قاعدة البيانات
+conn = sqlite3.connect("data.db", check_same_thread=False)
+c = conn.cursor()
 
-# بيانات الوظيفة
-st.header("📌 بيانات الوظيفة")
-required_experience = st.number_input("سنوات الخبرة المطلوبة", 1, 20, 5)
-
-# عدد المرشحين
-num_candidates = st.number_input("عدد المرشحين", 2, 20, 3)
-
-def score_candidate(exp, match, lang, ach):
-    score = 0
-    score += min(exp / required_experience, 1) * 30
-    score += 25 if match else 10
-    lang_score = {"ضعيف": 5, "جيد": 12, "ممتاز": 20}
-    score += lang_score[lang]
-    score += ach * 5
-    return round(score, 2)
-
-st.header("👥 إدخال المرشحين")
-
-candidates = []
-
-for i in range(int(num_candidates)):
-    with st.expander(f"مرشح {i+1}", expanded=True):
-        name = st.text_input("الاسم", key=f"name{i}")
-        exp = st.number_input("سنوات الخبرة", 0, 20, key=f"exp{i}")
-        match = st.checkbox("خبرة مطابقة", key=f"match{i}")
-        lang = st.selectbox("مستوى اللغة", ["ضعيف", "جيد", "ممتاز"], key=f"lang{i}")
-        ach = st.slider("عدد الإنجازات", 0, 5, key=f"ach{i}")
-
-        score = score_candidate(exp, match, lang, ach)
-
-        candidates.append({
-            "name": name if name else f"مرشح {i+1}",
-            "score": score
-        })
-
-# اختيار الموظف
-st.header("🎯 اختيار القرار")
-selected_name = st.selectbox(
-    "من تم توظيفه؟",
-    [c["name"] for c in candidates]
+c.execute("""
+CREATE TABLE IF NOT EXISTS users (
+    username TEXT,
+    password TEXT
 )
+""")
 
-if st.button("📊 تحليل القرار"):
-    sorted_candidates = sorted(candidates, key=lambda x: x["score"], reverse=True)
+c.execute("""
+CREATE TABLE IF NOT EXISTS jobs (
+    job_name TEXT,
+    created_by TEXT
+)
+""")
 
-    best = sorted_candidates[0]
-    selected = next(c for c in candidates if c["name"] == selected_name)
+conn.commit()
 
-    st.subheader("📈 النتائج")
+# 🔐 تسجيل الدخول
+st.sidebar.title("🔐 تسجيل الدخول")
 
-    for c in sorted_candidates:
-        st.write(f"{c['name']} — {c['score']}")
+username = st.sidebar.text_input("اسم المستخدم")
+password = st.sidebar.text_input("كلمة المرور", type="password")
 
-    st.divider()
+login = st.sidebar.button("دخول")
+register = st.sidebar.button("تسجيل")
 
-    st.success(f"🏆 الأفضل: {best['name']} ({best['score']})")
-    st.error(f"🎯 المختار: {selected['name']} ({selected['score']})")
+if register:
+    c.execute("INSERT INTO users VALUES (?, ?)", (username, password))
+    conn.commit()
+    st.sidebar.success("تم إنشاء الحساب")
 
-    # حساب نسبة العدالة
-    fairness = (selected["score"] / best["score"]) * 100
-    fairness = round(fairness, 1)
-
-    st.subheader("⚖️ تقييم العدالة")
-
-    st.write(f"نسبة العدالة: **{fairness}%**")
-
-    if fairness < 80:
-        st.error("🚨 القرار غير عادل (فيه تلاعب محتمل)")
-    elif fairness < 95:
-        st.warning("⚠️ القرار مقبول لكن فيه فرق واضح")
+if login:
+    user = c.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password)).fetchone()
+    if user:
+        st.session_state["user"] = username
     else:
-        st.success("✅ القرار عادل")
+        st.sidebar.error("خطأ في البيانات")
 
-    # بار مرئي
-    st.progress(int(fairness))
+# 🧠 إذا مسجل دخول
+if "user" in st.session_state:
+
+    st.sidebar.success(f"مرحبًا {st.session_state['user']}")
+
+    page = st.sidebar.radio("القائمة", [
+        "الرئيسية",
+        "إضافة وظيفة",
+        "الوظائف"
+    ])
+
+    if page == "الرئيسية":
+        st.title("🏛️ لوحة التحكم")
+        st.info("نظام رقابي ذكي لتحليل عدالة التوظيف")
+
+    elif page == "إضافة وظيفة":
+        st.title("➕ إضافة وظيفة")
+
+        job_name = st.text_input("اسم الوظيفة")
+
+        if st.button("حفظ"):
+            c.execute("INSERT INTO jobs VALUES (?, ?)", (job_name, st.session_state["user"]))
+            conn.commit()
+            st.success("تم حفظ الوظيفة")
+
+    elif page == "الوظائف":
+        st.title("📋 الوظائف")
+
+        jobs = c.execute("SELECT * FROM jobs").fetchall()
+
+        for job in jobs:
+            st.markdown(f"### {job[0]}")
+            st.write(f"بواسطة: {job[1]}")
+
+else:
+    st.title("🏛️ المنصة الوطنية")
+    st.warning("الرجاء تسجيل الدخول")
