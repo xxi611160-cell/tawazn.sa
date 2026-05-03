@@ -1,9 +1,15 @@
 import streamlit as st
 
-st.title("نظام تقييم عدالة التوظيف (توازن AI)")
+st.set_page_config(page_title="توازن AI", layout="wide")
 
-st.header("بيانات الوظيفة")
-required_experience = st.number_input("عدد سنوات الخبرة المطلوبة", min_value=1, max_value=20, value=5)
+st.title("🚀 نظام توازن AI - تحليل عدالة التوظيف")
+
+# بيانات الوظيفة
+st.header("📌 بيانات الوظيفة")
+required_experience = st.number_input("سنوات الخبرة المطلوبة", 1, 20, 5)
+
+# عدد المرشحين
+num_candidates = st.number_input("عدد المرشحين", 2, 20, 3)
 
 def score_candidate(exp, match, lang, ach):
     score = 0
@@ -14,39 +20,62 @@ def score_candidate(exp, match, lang, ach):
     score += ach * 5
     return round(score, 2)
 
-st.header("أدخل المرشحين")
+st.header("👥 إدخال المرشحين")
 
 candidates = []
 
-for i in range(3):
-    st.subheader(f"مرشح {i+1}")
-    name = st.text_input(f"اسم المرشح {i+1}", key=i)
-    exp = st.number_input(f"الخبرة {i+1}", 0, 20, key=f"exp{i}")
-    match = st.checkbox(f"خبرة مطابقة {i+1}", key=f"match{i}")
-    lang = st.selectbox(f"اللغة {i+1}", ["ضعيف", "جيد", "ممتاز"], key=f"lang{i}")
-    ach = st.slider(f"الإنجازات {i+1}", 0, 5, key=f"ach{i}")
+for i in range(int(num_candidates)):
+    with st.expander(f"مرشح {i+1}", expanded=True):
+        name = st.text_input("الاسم", key=f"name{i}")
+        exp = st.number_input("سنوات الخبرة", 0, 20, key=f"exp{i}")
+        match = st.checkbox("خبرة مطابقة", key=f"match{i}")
+        lang = st.selectbox("مستوى اللغة", ["ضعيف", "جيد", "ممتاز"], key=f"lang{i}")
+        ach = st.slider("عدد الإنجازات", 0, 5, key=f"ach{i}")
 
-    candidates.append({
-        "name": name,
-        "score": score_candidate(exp, match, lang, ach)
-    })
+        score = score_candidate(exp, match, lang, ach)
 
-if st.button("تحليل"):
+        candidates.append({
+            "name": name if name else f"مرشح {i+1}",
+            "score": score
+        })
+
+# اختيار الموظف
+st.header("🎯 اختيار القرار")
+selected_name = st.selectbox(
+    "من تم توظيفه؟",
+    [c["name"] for c in candidates]
+)
+
+if st.button("📊 تحليل القرار"):
     sorted_candidates = sorted(candidates, key=lambda x: x["score"], reverse=True)
 
-    st.subheader("النتائج")
+    best = sorted_candidates[0]
+    selected = next(c for c in candidates if c["name"] == selected_name)
+
+    st.subheader("📈 النتائج")
 
     for c in sorted_candidates:
-        st.write(f"{c['name']} - {c['score']}")
+        st.write(f"{c['name']} — {c['score']}")
 
-    best = sorted_candidates[0]
-    selected = sorted_candidates[-1]
+    st.divider()
 
-    st.write("------")
-    st.success(f"الأفضل: {best['name']}")
-    st.error(f"المختار: {selected['name']}")
+    st.success(f"🏆 الأفضل: {best['name']} ({best['score']})")
+    st.error(f"🎯 المختار: {selected['name']} ({selected['score']})")
 
-    if selected["score"] < best["score"] * 0.8:
-        st.warning("🚨 القرار مشبوه")
+    # حساب نسبة العدالة
+    fairness = (selected["score"] / best["score"]) * 100
+    fairness = round(fairness, 1)
+
+    st.subheader("⚖️ تقييم العدالة")
+
+    st.write(f"نسبة العدالة: **{fairness}%**")
+
+    if fairness < 80:
+        st.error("🚨 القرار غير عادل (فيه تلاعب محتمل)")
+    elif fairness < 95:
+        st.warning("⚠️ القرار مقبول لكن فيه فرق واضح")
     else:
-        st.success("✅ القرار منطقي")
+        st.success("✅ القرار عادل")
+
+    # بار مرئي
+    st.progress(int(fairness))
